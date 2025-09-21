@@ -8,45 +8,57 @@ function App() {
   const [connectionStatus, setConnectionStatus] = useState<string>('');
 
   const testConnection = async () => {
-    try {
-      setConnectionStatus('Testing connection...');
-      console.log('Testing backend connection to http://localhost:3000/health');
-      
-      // Try with different fetch configurations
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
-      
-      const response = await fetch('http://localhost:3000/health', {
-        method: 'GET',
-        mode: 'cors',
-        credentials: 'omit',
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-        },
-        signal: controller.signal
-      });
-      
-      clearTimeout(timeoutId);
-      
-      if (response.ok) {
-        const data = await response.json();
-        setConnectionStatus('✅ Backend connected successfully');
-        console.log('Backend health check successful:', data);
-      } else {
-        setConnectionStatus(`❌ Backend error: ${response.status} ${response.statusText}`);
-        console.error('Backend responded with error:', response.status, response.statusText);
-      }
-    } catch (error) {
-      console.error('Connection test failed:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      
-      if (errorMessage.includes('fetch')) {
-        setConnectionStatus('❌ Network error - Check if backend is running on port 3000');
-      } else if (errorMessage.includes('AbortError')) {
-        setConnectionStatus('❌ Connection timeout - Backend is not responding');
-      } else {
-        setConnectionStatus(`❌ Connection failed: ${errorMessage}`);
+    const endpoints = [
+      'http://localhost:3000/health',
+      'http://127.0.0.1:3000/health'
+    ];
+    
+    setConnectionStatus('Testing connection...');
+    console.log('Testing backend connection...');
+    
+    for (let i = 0; i < endpoints.length; i++) {
+      const endpoint = endpoints[i];
+      try {
+        console.log(`Trying endpoint ${i + 1}/${endpoints.length}: ${endpoint}`);
+        
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+        
+        const response = await fetch(endpoint, {
+          method: 'GET',
+          mode: 'cors',
+          credentials: 'omit',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+          },
+          signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (response.ok) {
+          const data = await response.json();
+          setConnectionStatus(`✅ Backend connected successfully (${endpoint})`);
+          console.log('Backend health check successful:', data);
+          return; // Success, exit the loop
+        } else {
+          console.error(`Endpoint ${endpoint} responded with error:`, response.status, response.statusText);
+        }
+      } catch (error) {
+        console.error(`Connection to ${endpoint} failed:`, error);
+        if (i === endpoints.length - 1) {
+          // This was the last endpoint, show error
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          
+          if (errorMessage.includes('fetch') || errorMessage.includes('Failed to fetch')) {
+            setConnectionStatus('❌ Network error - Backend may not be accessible from browser');
+          } else if (errorMessage.includes('AbortError')) {
+            setConnectionStatus('❌ Connection timeout - Backend is not responding');
+          } else {
+            setConnectionStatus(`❌ All connection attempts failed: ${errorMessage}`);
+          }
+        }
       }
     }
   };
@@ -65,31 +77,44 @@ function App() {
     const formData = new FormData();
     formData.append('audio', file);
 
-    try {
-      console.log('Starting upload to backend...');
-      const response = await fetch('http://localhost:3000/api/upload', {
-        method: 'POST',
-        body: formData,
-        mode: 'cors',
-      });
+    const endpoints = [
+      'http://localhost:3000/api/upload',
+      'http://127.0.0.1:3000/api/upload'
+    ];
 
-      console.log('Response received:', response.status, response.statusText);
-      const result = await response.json();
-      
-      if (response.ok) {
-        setJobId(result.jobId);
-        alert('Upload successful! Job ID: ' + result.jobId);
-      } else {
-        console.error('Upload error:', result);
-        alert('Upload failed: ' + result.message);
+    for (let i = 0; i < endpoints.length; i++) {
+      const endpoint = endpoints[i];
+      try {
+        console.log(`Trying upload to endpoint ${i + 1}/${endpoints.length}: ${endpoint}`);
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          body: formData,
+          mode: 'cors',
+        });
+
+        console.log('Response received:', response.status, response.statusText);
+        const result = await response.json();
+        
+        if (response.ok) {
+          setJobId(result.jobId);
+          alert('Upload successful! Job ID: ' + result.jobId);
+          setUploading(false);
+          return; // Success, exit the loop
+        } else {
+          console.error('Upload error:', result);
+          if (i === endpoints.length - 1) {
+            alert('Upload failed: ' + result.message);
+          }
+        }
+      } catch (error) {
+        console.error(`Upload to ${endpoint} failed:`, error);
+        if (i === endpoints.length - 1) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          alert('Upload failed - Network Error: ' + errorMessage + '\n\nPlease ensure the backend server is running on port 3000.');
+        }
       }
-    } catch (error) {
-      console.error('Network error:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      alert('Upload failed - Network Error: ' + errorMessage + '\n\nPlease ensure the backend server is running on port 3000.');
-    } finally {
-      setUploading(false);
     }
+    setUploading(false);
   };
 
   return (

@@ -48,9 +48,10 @@ app.use('/api/jobs', downloadRouter);
 // Error handling middleware (must be last)
 app.use(errorHandler);
 
-httpServer.listen(PORT, () => {
+httpServer.listen(Number(PORT), '0.0.0.0', () => {
   console.log(`🎤 KarokeMaker v2 API running on port ${PORT}`);
   console.log(`📡 WebSocket server ready for real-time updates`);
+  console.log(`🔗 Backend accessible at: http://localhost:${PORT}`);
 });
 
 // Export for use in workers
