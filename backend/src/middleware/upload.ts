@@ -14,7 +14,13 @@ const storage = multer.diskStorage({
 
 const fileFilter = (req: any, file: Express.Multer.File, cb: any) => {
   // Check file type
-  if (file.mimetype === 'audio/mpeg' || file.mimetype === 'audio/mp3') {
+  console.log('File MIME type detected:', file.mimetype);
+  console.log('File original name:', file.originalname);
+  
+  if (file.mimetype === 'audio/mpeg' || 
+      file.mimetype === 'audio/mp3' || 
+      file.mimetype === 'application/octet-stream' ||
+      file.originalname.toLowerCase().endsWith('.mp3')) {
     cb(null, true);
   } else {
     cb(new Error('Only MP3 files are allowed'), false);

@@ -5,6 +5,51 @@ function App() {
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [jobId, setJobId] = useState<string | null>(null);
+  const [connectionStatus, setConnectionStatus] = useState<string>('');
+
+  const testConnection = async () => {
+    try {
+      setConnectionStatus('Testing connection...');
+      console.log('Testing backend connection to http://localhost:3000/health');
+      
+      // Try with different fetch configurations
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      
+      const response = await fetch('http://localhost:3000/health', {
+        method: 'GET',
+        mode: 'cors',
+        credentials: 'omit',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (response.ok) {
+        const data = await response.json();
+        setConnectionStatus('✅ Backend connected successfully');
+        console.log('Backend health check successful:', data);
+      } else {
+        setConnectionStatus(`❌ Backend error: ${response.status} ${response.statusText}`);
+        console.error('Backend responded with error:', response.status, response.statusText);
+      }
+    } catch (error) {
+      console.error('Connection test failed:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      
+      if (errorMessage.includes('fetch')) {
+        setConnectionStatus('❌ Network error - Check if backend is running on port 3000');
+      } else if (errorMessage.includes('AbortError')) {
+        setConnectionStatus('❌ Connection timeout - Backend is not responding');
+      } else {
+        setConnectionStatus(`❌ Connection failed: ${errorMessage}`);
+      }
+    }
+  };
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = event.target.files?.[0];
@@ -21,20 +66,27 @@ function App() {
     formData.append('audio', file);
 
     try {
+      console.log('Starting upload to backend...');
       const response = await fetch('http://localhost:3000/api/upload', {
         method: 'POST',
         body: formData,
+        mode: 'cors',
       });
 
+      console.log('Response received:', response.status, response.statusText);
       const result = await response.json();
       
       if (response.ok) {
         setJobId(result.jobId);
+        alert('Upload successful! Job ID: ' + result.jobId);
       } else {
+        console.error('Upload error:', result);
         alert('Upload failed: ' + result.message);
       }
     } catch (error) {
-      alert('Upload failed: ' + error);
+      console.error('Network error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      alert('Upload failed - Network Error: ' + errorMessage + '\n\nPlease ensure the backend server is running on port 3000.');
     } finally {
       setUploading(false);
     }
@@ -55,6 +107,25 @@ function App() {
             <div className="divide-y divide-gray-200">
               <div className="py-8 text-base leading-6 space-y-4 text-gray-700 sm:text-lg sm:leading-7">
                 <div className="flex flex-col space-y-4">
+                  
+                  {/* Connection Test Section */}
+                  <div className="bg-gray-50 p-4 rounded-md">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-medium">Backend Connection:</span>
+                      <button
+                        onClick={testConnection}
+                        className="px-3 py-1 text-xs bg-gray-200 hover:bg-gray-300 rounded"
+                      >
+                        Test
+                      </button>
+                    </div>
+                    {connectionStatus && (
+                      <div className="mt-2 text-xs text-gray-600">
+                        {connectionStatus}
+                      </div>
+                    )}
+                  </div>
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700">
                       Select MP3 File
