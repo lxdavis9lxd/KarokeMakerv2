@@ -17,7 +17,9 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@types/archiver": "^6.0.3",
     "@types/uuid": "^11.0.0",
+    "archiver": "^7.0.1",
     "bullmq": "^5.58.7",
     "cors": "^2.8.5",
     "dotenv": "^17.2.2",

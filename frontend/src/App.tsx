@@ -1,35 +1,109 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { useState } from 'react';
+import './App.css';
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [file, setFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [jobId, setJobId] = useState<string | null>(null);
+
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = event.target.files?.[0];
+    if (selectedFile) {
+      setFile(selectedFile);
+    }
+  };
+
+  const handleUpload = async () => {
+    if (!file) return;
+
+    setUploading(true);
+    const formData = new FormData();
+    formData.append('audio', file);
+
+    try {
+      const response = await fetch('http://localhost:3000/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const result = await response.json();
+      
+      if (response.ok) {
+        setJobId(result.jobId);
+      } else {
+        alert('Upload failed: ' + result.message);
+      }
+    } catch (error) {
+      alert('Upload failed: ' + error);
+    } finally {
+      setUploading(false);
+    }
+  };
 
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
+    <div className="min-h-screen bg-gray-100 py-6 flex flex-col justify-center sm:py-12">
+      <div className="relative py-3 sm:max-w-xl sm:mx-auto">
+        <div className="absolute inset-0 bg-gradient-to-r from-cyan-400 to-light-blue-500 shadow-lg transform -skew-y-6 sm:skew-y-0 sm:-rotate-6 sm:rounded-3xl"></div>
+        <div className="relative px-4 py-10 bg-white shadow-lg sm:rounded-3xl sm:p-20">
+          <div className="max-w-md mx-auto">
+            <div>
+              <h1 className="text-2xl font-semibold text-center">🎤 KarokeMaker v2</h1>
+              <p className="text-center text-gray-600 mt-2">
+                Convert your MP3 to karaoke format
+              </p>
+            </div>
+            <div className="divide-y divide-gray-200">
+              <div className="py-8 text-base leading-6 space-y-4 text-gray-700 sm:text-lg sm:leading-7">
+                <div className="flex flex-col space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Select MP3 File
+                    </label>
+                    <input
+                      type="file"
+                      accept=".mp3,audio/mpeg"
+                      onChange={handleFileSelect}
+                      className="mt-1 block w-full text-sm text-gray-500
+                               file:mr-4 file:py-2 file:px-4
+                               file:rounded-full file:border-0
+                               file:text-sm file:font-semibold
+                               file:bg-blue-50 file:text-blue-700
+                               hover:file:bg-blue-100"
+                    />
+                  </div>
+                  
+                  {file && (
+                    <div className="text-sm text-gray-600">
+                      Selected: {file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)
+                    </div>
+                  )}
+
+                  <button
+                    onClick={handleUpload}
+                    disabled={!file || uploading}
+                    className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {uploading ? 'Uploading...' : 'Convert to Karaoke'}
+                  </button>
+
+                  {jobId && (
+                    <div className="p-4 bg-green-50 rounded-md">
+                      <p className="text-sm text-green-700">
+                        Upload successful! Job ID: {jobId}
+                      </p>
+                      <p className="text-xs text-green-600 mt-1">
+                        Processing will begin shortly...
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
+    </div>
+  );
 }
 
-export default App
+export default App;
