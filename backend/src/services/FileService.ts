@@ -10,6 +10,17 @@ export class FileService {
   constructor() {
     this.uploadDir = process.env.UPLOAD_DIR || './uploads';
     this.processedDir = process.env.PROCESSED_DIR || './processed';
+    this.ensureDirectoriesExist();
+  }
+
+  private async ensureDirectoriesExist(): Promise<void> {
+    try {
+      await fs.mkdir(this.uploadDir, { recursive: true });
+      await fs.mkdir(this.processedDir, { recursive: true });
+      console.log(`📁 Ensured directories exist: ${this.uploadDir}, ${this.processedDir}`);
+    } catch (error) {
+      console.error('Failed to create directories:', error);
+    }
   }
 
   async saveUploadedFile(file: UploadedFile): Promise<AudioFile> {
@@ -18,24 +29,39 @@ export class FileService {
     const filename = `${id}${extension}`;
     const filePath = path.join(this.uploadDir, filename);
 
-    // Move file to permanent location
-    await fs.rename(file.path, filePath);
+    console.log(`📁 Saving file from ${file.path} to ${filePath}`);
 
-    // Extract metadata (basic implementation)
-    const metadata = await this.extractAudioMetadata(filePath);
+    try {
+      // Ensure upload directory exists
+      await fs.mkdir(this.uploadDir, { recursive: true });
+      
+      // Check if source file exists
+      await fs.access(file.path);
+      console.log(`✅ Source file exists: ${file.path}`);
+      
+      // Move file to permanent location
+      await fs.rename(file.path, filePath);
+      console.log(`✅ File moved successfully to: ${filePath}`);
 
-    const audioFile: AudioFile = {
-      id,
-      filename,
-      originalName: file.originalname,
-      mimetype: file.mimetype,
-      size: file.size,
-      path: filePath,
-      uploadedAt: new Date(),
-      metadata,
-    };
+      // Extract metadata (basic implementation)
+      const metadata = await this.extractAudioMetadata(filePath);
 
-    return audioFile;
+      const audioFile: AudioFile = {
+        id,
+        filename,
+        originalName: file.originalname,
+        mimetype: file.mimetype,
+        size: file.size,
+        path: filePath,
+        uploadedAt: new Date(),
+        metadata,
+      };
+
+      return audioFile;
+    } catch (error) {
+      console.error(`❌ Failed to save uploaded file:`, error);
+      throw new Error(`Failed to save uploaded file: ${error}`);
+    }
   }
 
   async getFile(id: string): Promise<AudioFile | null> {
