@@ -344,14 +344,9 @@ Generated on: ${new Date().toISOString()}
       const scriptPath = path.resolve('./scripts/audio_processor.py');
       const fallbackScriptPath = path.resolve('./scripts/audio_processor_fallback.py');
       
-      // Check if main script exists, otherwise use fallback
+      // Now that FFmpeg is installed, use the full processor
       let processorScript = scriptPath;
-      try {
-        await fs.access(scriptPath);
-      } catch {
-        processorScript = fallbackScriptPath;
-        console.log(`🔄 Using fallback processor: ${fallbackScriptPath}`);
-      }
+      console.log(`🎵 Using full FFmpeg processor: ${scriptPath}`);
       
       console.log(`🐍 Calling Python processor: ${processorScript}`);
       
