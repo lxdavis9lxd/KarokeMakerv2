@@ -2,15 +2,21 @@ import { Queue, Job as BullJob } from 'bullmq';
 import { v4 as uuidv4 } from 'uuid';
 import { Job, JobStatus, CreateJobRequest, ProcessingOptions } from '../models/Job';
 import { Redis } from 'ioredis';
+import { promises as fs } from 'fs';
+import path from 'path';
 
 export class JobService {
   private queue?: Queue;
   private redis?: Redis;
   private redisAvailable: boolean = false;
   private memoryJobs: Map<string, Job> = new Map();
+  private initializationPromise?: Promise<void>;
 
   constructor() {
-    this.initializeRedis();
+    // Only initialize once
+    if (!this.initializationPromise) {
+      this.initializationPromise = this.initializeRedis();
+    }
   }
 
   private async initializeRedis(): Promise<void> {
@@ -18,12 +24,19 @@ export class JobService {
       this.redis = new Redis({
         host: process.env.REDIS_HOST || 'localhost',
         port: parseInt(process.env.REDIS_PORT || '6379'),
-        connectTimeout: 5000,
+        connectTimeout: 2000,
         lazyConnect: true,
+        enableReadyCheck: false,
+        maxRetriesPerRequest: 1,
       });
 
-      // Test connection
-      await this.redis.ping();
+      // Test connection with timeout
+      await Promise.race([
+        this.redis.ping(),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Connection timeout')), 3000)
+        )
+      ]);
       
       this.queue = new Queue('karaoke-processing', {
         connection: this.redis,
@@ -34,12 +47,16 @@ export class JobService {
     } catch (error) {
       console.log('⚠️  Redis not available, using in-memory storage for development');
       this.redisAvailable = false;
+      this.redis?.disconnect();
       this.redis = undefined;
       this.queue = undefined;
     }
   }
 
   async createJob(request: CreateJobRequest): Promise<Job> {
+    // Wait for initialization to complete
+    await this.initializationPromise;
+    
     const jobId = uuidv4();
     
     const job: Job = {
@@ -230,14 +247,63 @@ export class JobService {
       console.log(`📊 Job ${jobId} progress: ${progress}%`);
     }
     
-    // Complete the job
+    // Create actual output files in processed directory
     await new Promise(resolve => setTimeout(resolve, 1000));
-    await this.updateJobStatus(jobId, 'completed', 100, undefined, {
-      karaokeFile: `karaoke_${jobId}.mp3`,
-      instrumentalFile: `instrumental_${jobId}.mp3`,
-      lyricsFile: `lyrics_${jobId}.txt`,
-    });
     
-    console.log(`✅ Job ${jobId} completed (simulated)`);
+    try {
+      const processedDir = path.resolve('./processed');
+      const karaokeFileName = `karaoke_${jobId}.mp3`;
+      const instrumentalFileName = `instrumental_${jobId}.mp3`;
+      const lyricsFileName = `lyrics_${jobId}.txt`;
+      
+      const karaokePath = path.join(processedDir, karaokeFileName);
+      const instrumentalPath = path.join(processedDir, instrumentalFileName);
+      const lyricsPath = path.join(processedDir, lyricsFileName);
+      
+      // Create sample karaoke file (placeholder)
+      await fs.writeFile(karaokePath, Buffer.from([
+        // MP3 header for a minimal valid MP3 file
+        0xFF, 0xFB, 0x90, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+      ]));
+      
+      // Create sample instrumental file (placeholder)  
+      await fs.writeFile(instrumentalPath, Buffer.from([
+        0xFF, 0xFB, 0x90, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+      ]));
+      
+      // Create lyrics file
+      await fs.writeFile(lyricsPath, `# Karaoke Lyrics for Job ${jobId}
+
+[00:00] Sample karaoke track created
+[00:05] This is a simulated output  
+[00:10] In a real implementation, vocal separation would occur here
+[00:15] Creating instrumental and karaoke tracks
+
+Generated on: ${new Date().toISOString()}
+`);
+
+      console.log(`📁 Created output files in: ${processedDir}`);
+      console.log(`🎵 Karaoke: ${karaokePath}`);
+      console.log(`🎼 Instrumental: ${instrumentalPath}`);
+      console.log(`📝 Lyrics: ${lyricsPath}`);
+      
+      // Complete the job with actual file paths
+      await this.updateJobStatus(jobId, 'completed', 100, undefined, {
+        karaokeFile: karaokeFileName,
+        instrumentalFile: instrumentalFileName,
+        lyricsFile: lyricsFileName,
+        karaokePath: karaokePath,
+        instrumentalPath: instrumentalPath,
+        lyricsPath: lyricsPath,
+        processedDir: processedDir
+      });
+      
+      console.log(`✅ Job ${jobId} completed with output files created`);
+    } catch (error) {
+      console.error(`❌ Failed to create output files for job ${jobId}:`, error);
+      await this.updateJobStatus(jobId, 'failed', 100, `Failed to create output files: ${error}`);
+    }
   }
 }

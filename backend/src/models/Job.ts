@@ -20,8 +20,13 @@ export type JobStatus =
   | 'failed';
 
 export interface JobResults {
+  karaokeFile: string;
+  instrumentalFile: string;
+  lyricsFile: string;
+  karaokePath: string;
   instrumentalPath: string;
   lyricsPath: string;
+  processedDir: string;
   originalVocalsPath?: string;
   duration?: number;
   metadata?: {

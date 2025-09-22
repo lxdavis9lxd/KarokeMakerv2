@@ -1,11 +1,94 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import './App.css';
+
+interface Job {
+  id: string;
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  progress: number;
+  error?: string;
+  results?: {
+    karaokeFile: string;
+    instrumentalFile: string;
+    lyricsFile: string;
+    processedDir: string;
+  };
+}
 
 function App() {
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [jobId, setJobId] = useState<string | null>(null);
+  const [job, setJob] = useState<Job | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<string>('');
+  const [ws, setWs] = useState<WebSocket | null>(null);
+
+  // WebSocket connection for real-time updates
+  useEffect(() => {
+    if (jobId) {
+      const websocket = new WebSocket('ws://localhost:3000');
+      
+      websocket.onopen = () => {
+        console.log('WebSocket connected');
+        websocket.send(JSON.stringify({ type: 'subscribe', jobId }));
+      };
+      
+      websocket.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        if (data.jobId === jobId) {
+          setJob(data);
+        }
+      };
+      
+      websocket.onclose = () => {
+        console.log('WebSocket disconnected');
+      };
+      
+      setWs(websocket);
+      
+      return () => {
+        websocket.close();
+      };
+    }
+  }, [jobId]);
+
+  // Fetch job status
+  const fetchJobStatus = async (id: string) => {
+    try {
+      const response = await fetch(`http://localhost:3000/api/jobs/${id}`);
+      if (response.ok) {
+        const jobData = await response.json();
+        setJob(jobData);
+      }
+    } catch (error) {
+      console.error('Failed to fetch job status:', error);
+    }
+  };
+
+  // Download file
+  const downloadFile = async (type: 'karaoke' | 'instrumental' | 'lyrics') => {
+    if (!jobId) return;
+    
+    try {
+      const response = await fetch(`http://localhost:3000/api/jobs/${jobId}/download/${type}`);
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        a.download = `${type}.${type === 'lyrics' ? 'txt' : 'mp3'}`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      } else {
+        alert('Download failed');
+      }
+    } catch (error) {
+      console.error('Download error:', error);
+      alert('Download failed');
+    }
+  };
 
   const testConnection = async () => {
     const endpoints = [
@@ -97,7 +180,7 @@ function App() {
         
         if (response.ok) {
           setJobId(result.jobId);
-          alert('Upload successful! Job ID: ' + result.jobId);
+          fetchJobStatus(result.jobId);
           setUploading(false);
           return; // Success, exit the loop
         } else {
@@ -182,14 +265,63 @@ function App() {
                     {uploading ? 'Uploading...' : 'Convert to Karaoke'}
                   </button>
 
-                  {jobId && (
-                    <div className="p-4 bg-green-50 rounded-md">
-                      <p className="text-sm text-green-700">
-                        Upload successful! Job ID: {jobId}
+                  {job && (
+                    <div className="p-4 bg-blue-50 rounded-md">
+                      <div className="flex justify-between items-center mb-2">
+                        <p className="text-sm font-medium text-blue-700">
+                          Job Status: {job.status}
+                        </p>
+                        <span className="text-xs text-blue-600">
+                          ID: {jobId}
+                        </span>
+                      </div>
+                      
+                      {job.status === 'processing' && (
+                        <div className="w-full bg-blue-200 rounded-full h-2.5 mb-2">
+                          <div 
+                            className="bg-blue-600 h-2.5 rounded-full transition-all duration-300" 
+                            style={{ width: `${job.progress}%` }}
+                          ></div>
+                        </div>
+                      )}
+                      
+                      <p className="text-xs text-blue-600">
+                        {job.status === 'pending' && 'Processing will begin shortly...'}
+                        {job.status === 'processing' && `Processing... ${job.progress}%`}
+                        {job.status === 'completed' && 'Processing completed successfully!'}
+                        {job.status === 'failed' && `Failed: ${job.error || 'Unknown error'}`}
                       </p>
-                      <p className="text-xs text-green-600 mt-1">
-                        Processing will begin shortly...
-                      </p>
+                      
+                      {job.status === 'completed' && job.results && (
+                        <div className="mt-4 space-y-2">
+                          <p className="text-sm font-medium text-green-700">
+                            🎉 Your karaoke files are ready for download!
+                          </p>
+                          <p className="text-xs text-green-600 mb-3">
+                            Output directory: {job.results.processedDir}
+                          </p>
+                          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                            <button
+                              onClick={() => downloadFile('karaoke')}
+                              className="px-3 py-2 text-xs bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+                            >
+                              📥 Download Karaoke
+                            </button>
+                            <button
+                              onClick={() => downloadFile('instrumental')}
+                              className="px-3 py-2 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                            >
+                              📥 Download Instrumental
+                            </button>
+                            <button
+                              onClick={() => downloadFile('lyrics')}
+                              className="px-3 py-2 text-xs bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors"
+                            >
+                              📥 Download Lyrics
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
