@@ -1,8 +1,7 @@
 import { Router, Request, Response } from 'express';
-import { JobService } from '../services/JobService';
+import { jobService } from '../services';
 
 const router = Router();
-const jobService = new JobService();
 
 router.get('/:id/status', async (req: Request, res: Response) => {
   try {

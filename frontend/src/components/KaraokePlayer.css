@@ -1,0 +1,82 @@
+/* Karaoke Player Styles */
+.karaoke-player .slider::-webkit-slider-thumb {
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #10b981;
+  cursor: pointer;
+  border: 2px solid #ffffff;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
+}
+
+.karaoke-player .slider::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #10b981;
+  cursor: pointer;
+  border: 2px solid #ffffff;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
+}
+
+.lyrics-word {
+  display: inline-block;
+  transition: all 0.3s ease;
+}
+
+.lyrics-line {
+  line-height: 1.5;
+}
+
+@keyframes glow {
+  0%, 100% { 
+    text-shadow: 0 0 10px #fbbf24, 0 0 20px #fbbf24; 
+  }
+  50% { 
+    text-shadow: 0 0 20px #fbbf24, 0 0 30px #fbbf24, 0 0 40px #fbbf24; 
+  }
+}
+
+.karaoke-glow {
+  animation: glow 1s ease-in-out infinite;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .lyrics-word {
+    font-size: 1.5rem !important;
+    margin: 0.25rem;
+  }
+  
+  .lyrics-line {
+    margin-bottom: 1rem;
+  }
+}
+
+/* Audio progress bar styling */
+.karaoke-player input[type="range"] {
+  background: #374151;
+  border-radius: 0.5rem;
+  height: 8px;
+  outline: none;
+  opacity: 0.9;
+  transition: opacity 0.2s;
+}
+
+.karaoke-player input[type="range"]:hover {
+  opacity: 1;
+}
+
+.karaoke-player input[type="range"]::-webkit-slider-track {
+  background: #374151;
+  border-radius: 0.5rem;
+  height: 8px;
+}
+
+.karaoke-player input[type="range"]::-moz-range-track {
+  background: #374151;
+  border-radius: 0.5rem;
+  height: 8px;
+  border: none;
+}

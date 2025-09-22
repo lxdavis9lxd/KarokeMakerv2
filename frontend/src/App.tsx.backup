@@ -37,7 +37,6 @@ function App() {
       
       websocket.onmessage = (event) => {
         const data = JSON.parse(event.data);
-        console.log('WebSocket message received:', data);
         if (data.jobId === jobId) {
           setJob(data);
         }
@@ -49,14 +48,8 @@ function App() {
       
       setWs(websocket);
       
-      // Also poll for job status every 3 seconds as backup
-      const pollInterval = setInterval(() => {
-        fetchJobStatus(jobId);
-      }, 3000);
-      
       return () => {
         websocket.close();
-        clearInterval(pollInterval);
       };
     }
   }, [jobId]);
@@ -64,13 +57,10 @@ function App() {
   // Fetch job status
   const fetchJobStatus = async (id: string) => {
     try {
-      const response = await fetch(`http://localhost:3000/api/jobs/${id}/status`);
+      const response = await fetch(`http://localhost:3000/api/jobs/${id}`);
       if (response.ok) {
         const jobData = await response.json();
-        console.log('Job status updated:', jobData);
         setJob(jobData);
-      } else {
-        console.error('Failed to fetch job status:', response.status, response.statusText);
       }
     } catch (error) {
       console.error('Failed to fetch job status:', error);
@@ -331,17 +321,9 @@ function App() {
                         <p className="text-sm font-medium text-blue-700">
                           Job Status: {job.status}
                         </p>
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => fetchJobStatus(jobId!)}
-                            className="text-xs px-2 py-1 bg-blue-200 hover:bg-blue-300 rounded"
-                          >
-                            🔄 Refresh
-                          </button>
-                          <span className="text-xs text-blue-600">
-                            ID: {jobId}
-                          </span>
-                        </div>
+                        <span className="text-xs text-blue-600">
+                          ID: {jobId}
+                        </span>
                       </div>
                       
                       {job.status === 'processing' && (
@@ -359,14 +341,6 @@ function App() {
                         {job.status === 'completed' && 'Processing completed successfully!'}
                         {job.status === 'failed' && `Failed: ${job.error || 'Unknown error'}`}
                       </p>
-                      
-                      {/* Debug info */}
-                      <details className="mt-2">
-                        <summary className="text-xs text-gray-500 cursor-pointer">Debug Info</summary>
-                        <pre className="text-xs text-gray-600 mt-1 overflow-auto">
-                          {JSON.stringify(job, null, 2)}
-                        </pre>
-                      </details>
                       
                       {job.status === 'completed' && job.results && (
                         <div className="mt-4 space-y-2">

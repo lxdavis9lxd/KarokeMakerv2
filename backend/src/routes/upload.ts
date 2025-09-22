@@ -1,11 +1,8 @@
 import { Router, Request, Response } from 'express';
 import { upload } from '../middleware/upload';
-import { FileService } from '../services/FileService';
-import { JobService } from '../services/JobService';
+import { fileService, jobService } from '../services';
 
 const router = Router();
-const fileService = new FileService();
-const jobService = new JobService();
 
 interface UploadRequest extends Request {
   file?: Express.Multer.File;

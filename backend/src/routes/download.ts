@@ -2,10 +2,9 @@ import { Router, Request, Response } from 'express';
 import { promises as fs } from 'fs';
 import path from 'path';
 import archiver from 'archiver';
-import { JobService } from '../services/JobService';
+import { jobService } from '../services';
 
 const router = Router();
-const jobService = new JobService();
 
 router.get('/:id/download', async (req: Request, res: Response) => {
   try {
