@@ -1,0 +1,10 @@
+# Requirements for real audio processing (Python 3.13 compatible)
+# Using pydub and librosa instead of Spleeter for better compatibility
+pydub>=0.25.1
+librosa>=0.10.0
+numpy>=1.24.0
+scipy>=1.10.0
+torch>=2.0.0
+torchaudio>=2.0.0
+# Optional: Use basic vocal removal with FFmpeg filters
+# For advanced AI separation, consider using online APIs or Docker containers

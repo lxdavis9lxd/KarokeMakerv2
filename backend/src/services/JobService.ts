@@ -233,7 +233,12 @@ export class JobService {
   }
 
   private async simulateJobProcessing(jobId: string): Promise<void> {
-    // Simulate job processing for development mode
+    // Check if real processing is enabled
+    if (process.env.ENABLE_REAL_PROCESSING === 'true') {
+      return this.realJobProcessing(jobId);
+    }
+
+    // Fallback to simulation for development mode
     console.log(`🎵 Simulating processing for job ${jobId}`);
     
     // Update to processing
@@ -304,6 +309,146 @@ Generated on: ${new Date().toISOString()}
     } catch (error) {
       console.error(`❌ Failed to create output files for job ${jobId}:`, error);
       await this.updateJobStatus(jobId, 'failed', 100, `Failed to create output files: ${error}`);
+    }
+  }
+
+  private async realJobProcessing(jobId: string): Promise<void> {
+    console.log(`🎵 Starting REAL processing for job ${jobId}`);
+    
+    try {
+      // Update to processing
+      await this.updateJobStatus(jobId, 'processing', 5);
+
+      // Get the job to find the audio file
+      const job = await this.getJob(jobId);
+      if (!job) {
+        throw new Error('Job not found');
+      }
+
+      // Find the input file
+      const uploadsDir = path.resolve('./uploads');
+      const inputFile = path.join(uploadsDir, `${job.audioFileId}.mp3`);
+      
+      // Check if input file exists
+      try {
+        await fs.access(inputFile);
+      } catch {
+        throw new Error(`Input file not found: ${inputFile}`);
+      }
+
+      // Setup output directory
+      const processedDir = path.resolve('./processed');
+      await fs.mkdir(processedDir, { recursive: true });
+
+      // Call Python script for real audio processing
+      const scriptPath = path.resolve('./scripts/audio_processor.py');
+      const fallbackScriptPath = path.resolve('./scripts/audio_processor_fallback.py');
+      
+      // Check if main script exists, otherwise use fallback
+      let processorScript = scriptPath;
+      try {
+        await fs.access(scriptPath);
+      } catch {
+        processorScript = fallbackScriptPath;
+        console.log(`🔄 Using fallback processor: ${fallbackScriptPath}`);
+      }
+      
+      console.log(`🐍 Calling Python processor: ${processorScript}`);
+      
+      const { spawn } = require('child_process');
+      
+      return new Promise((resolve, reject) => {
+        const pythonProcess = spawn('python', [processorScript, inputFile, processedDir, jobId], {
+          stdio: ['pipe', 'pipe', 'pipe']
+        });
+
+        let outputBuffer = '';
+        let errorBuffer = '';
+
+        pythonProcess.stdout.on('data', async (data: Buffer) => {
+          const output = data.toString();
+          outputBuffer += output;
+          
+          // Parse progress updates
+          const lines = output.split('\n');
+          for (const line of lines) {
+            if (line.startsWith('PROGRESS:')) {
+              try {
+                const progressData = JSON.parse(line.substring(9));
+                await this.updateJobStatus(jobId, 'processing', progressData.progress);
+                console.log(`📊 Job ${jobId} progress: ${progressData.progress}% - ${progressData.message}`);
+              } catch (e) {
+                console.warn('Failed to parse progress:', line);
+              }
+            } else if (line.startsWith('RESULT:')) {
+              try {
+                const result = JSON.parse(line.substring(7));
+                if (result.success) {
+                  // Extract filenames from full paths
+                  const karaokeFileName = path.basename(result.karaoke_file);
+                  const instrumentalFileName = path.basename(result.instrumental_file);
+                  const lyricsFileName = path.basename(result.lyrics_file);
+                  
+                  await this.updateJobStatus(jobId, 'completed', 100, undefined, {
+                    karaokeFile: karaokeFileName,
+                    instrumentalFile: instrumentalFileName,
+                    lyricsFile: lyricsFileName,
+                    karaokePath: result.karaoke_file,
+                    instrumentalPath: result.instrumental_file,
+                    lyricsPath: result.lyrics_file,
+                    processedDir: processedDir
+                  });
+                  
+                  console.log(`✅ Job ${jobId} completed with REAL audio separation!`);
+                  console.log(`🎵 Karaoke: ${result.karaoke_file}`);
+                  console.log(`🎼 Instrumental: ${result.instrumental_file}`);
+                  console.log(`📝 Lyrics: ${result.lyrics_file}`);
+                  
+                  resolve();
+                } else {
+                  throw new Error(result.error || 'Processing failed');
+                }
+              } catch (e) {
+                console.warn('Failed to parse result:', line);
+              }
+            }
+          }
+        });
+
+        pythonProcess.stderr.on('data', (data: Buffer) => {
+          errorBuffer += data.toString();
+          console.error(`Python stderr: ${data.toString()}`);
+        });
+
+        pythonProcess.on('close', async (code: number | null) => {
+          if (code !== 0 && code !== null) {
+            const error = `Python process exited with code ${code}. Error: ${errorBuffer}`;
+            console.error(`❌ Real processing failed for job ${jobId}: ${error}`);
+            await this.updateJobStatus(jobId, 'failed', 100, error);
+            reject(new Error(error));
+          }
+        });
+
+        pythonProcess.on('error', async (error: Error) => {
+          console.error(`❌ Failed to start Python process for job ${jobId}:`, error);
+          await this.updateJobStatus(jobId, 'failed', 100, `Failed to start processing: ${error.message}`);
+          reject(error);
+        });
+
+        // Set timeout for processing (10 minutes)
+        setTimeout(async () => {
+          pythonProcess.kill();
+          const timeoutError = 'Processing timeout (10 minutes)';
+          console.error(`❌ Job ${jobId} timed out`);
+          await this.updateJobStatus(jobId, 'failed', 100, timeoutError);
+          reject(new Error(timeoutError));
+        }, 10 * 60 * 1000);
+      });
+
+    } catch (error) {
+      console.error(`❌ Real processing failed for job ${jobId}:`, error);
+      await this.updateJobStatus(jobId, 'failed', 100, `Real processing failed: ${error}`);
+      throw error;
     }
   }
 }
