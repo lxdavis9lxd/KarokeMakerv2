@@ -251,7 +251,7 @@ function App() {
           ← Back to Main
         </button>
         <KaraokePlayer
-          instrumentalUrl={`http://localhost:3000/api/jobs/${jobId}/download/instrumental`}
+          instrumentalUrl={`http://localhost:3000/api/jobs/${jobId}/preview/instrumental`}
           lyricsText={lyricsContent}
           songTitle={file?.name?.replace('.mp3', '') || 'Karaoke Song'}
         />

@@ -23,10 +23,28 @@
 .lyrics-word {
   display: inline-block;
   transition: all 0.3s ease;
+  margin: 0 0.2rem;
+  padding: 0.2rem 0.4rem;
+  border-radius: 0.3rem;
+}
+
+.lyrics-word.active {
+  background: rgba(251, 191, 36, 0.2);
+  border: 1px solid #fbbf24;
+}
+
+.lyrics-word.passed {
+  color: #9ca3af;
+}
+
+.lyrics-word.upcoming {
+  color: #e5e7eb;
 }
 
 .lyrics-line {
-  line-height: 1.5;
+  line-height: 1.8;
+  margin-bottom: 1.5rem;
+  min-height: 3rem;
 }
 
 @keyframes glow {

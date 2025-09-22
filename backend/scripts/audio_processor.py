@@ -66,23 +66,40 @@ def transcribe_vocals(audio_file, job_id):
         # Transcribe with word-level timestamps
         result = model.transcribe(str(audio_file), word_timestamps=True)
         
-        # Format for karaoke display
+        # Format for karaoke display with better readability
         karaoke_lyrics = []
+        readable_lyrics = []
         
         if 'segments' in result:
             for segment in result['segments']:
                 if 'words' in segment:
-                    # Process word-level timestamps
-                    for word_info in segment['words']:
-                        start_time = word_info.get('start', 0)
-                        end_time = word_info.get('end', 0)
-                        word = word_info.get('word', '').strip()
+                    # Group words into readable lines (segment-based)
+                    start_time = segment.get('start', 0)
+                    text = segment.get('text', '').strip()
+                    
+                    if text:
+                        start_mins = int(start_time // 60)
+                        start_secs = start_time % 60
                         
-                        if word:
-                            # Format: [mm:ss.ss] word
-                            start_mins = int(start_time // 60)
-                            start_secs = start_time % 60
-                            karaoke_lyrics.append(f"[{start_mins:02d}:{start_secs:05.2f}] {word}")
+                        # For karaoke player: segment-level timestamps
+                        karaoke_lyrics.append(f"[{start_mins:02d}:{start_secs:05.2f}] {text}")
+                        
+                        # For readable display: clean text with proper spacing
+                        readable_lyrics.append(text)
+                        
+                        # Also include individual word timestamps for advanced karaoke
+                        word_line = []
+                        for word_info in segment['words']:
+                            word_start = word_info.get('start', 0)
+                            word = word_info.get('word', '').strip()
+                            if word:
+                                word_mins = int(word_start // 60)
+                                word_secs = word_start % 60
+                                word_line.append(f"    [{word_mins:02d}:{word_secs:05.2f}] {word}")
+                        
+                        if word_line:
+                            karaoke_lyrics.extend(word_line)
+                            karaoke_lyrics.append("")  # Add blank line between segments
                 else:
                     # Fallback to segment-level timestamps
                     start_time = segment.get('start', 0)
@@ -92,10 +109,12 @@ def transcribe_vocals(audio_file, job_id):
                         start_mins = int(start_time // 60)
                         start_secs = start_time % 60
                         karaoke_lyrics.append(f"[{start_mins:02d}:{start_secs:05.2f}] {text}")
+                        readable_lyrics.append(text)
         
         return {
             'success': True,
             'lyrics': '\n'.join(karaoke_lyrics),
+            'readable_lyrics': '\n\n'.join(readable_lyrics),  # Readable format with paragraph breaks
             'full_text': result.get('text', ''),
             'language': result.get('language', 'unknown')
         }
@@ -165,11 +184,11 @@ def separate_audio_ffmpeg(input_file, output_dir, job_id):
             if transcription_result['success']:
                 f.write(f"""# Karaoke Lyrics - {Path(input_file).name}
 
+## Readable Lyrics
+{transcription_result.get('readable_lyrics', transcription_result['full_text'])}
+
 ## Timestamped Lyrics (Karaoke Format)
 {transcription_result['lyrics']}
-
-## Full Transcript
-{transcription_result['full_text']}
 
 ## Processing Information
 - Language Detected: {transcription_result['language']}
