@@ -344,20 +344,41 @@ Generated on: ${new Date().toISOString()}
       await fs.mkdir(processedDir, { recursive: true });
 
       // Call Python script for real audio processing
-      const scriptPath = path.resolve('./backend/scripts/audio_processor.py');
-      const fallbackScriptPath = path.resolve('./backend/scripts/audio_processor_fallback.py');
+      console.log(`🔍 Current working directory: ${process.cwd()}`);
+      const scriptPath = path.resolve('./scripts/audio_processor.py');
+      const fallbackScriptPath = path.resolve('./scripts/audio_processor_fallback.py');
       
       // Now that FFmpeg is installed, use the full processor
       let processorScript = scriptPath;
       console.log(`🎵 Using full FFmpeg processor: ${scriptPath}`);
+      
+      // Check if script exists
+      try {
+        await fs.access(processorScript);
+        console.log(`✅ Python script exists at: ${processorScript}`);
+      } catch (error) {
+        console.error(`❌ Python script NOT found at: ${processorScript}`);
+        console.error(`❌ Error: ${error}`);
+      }
       
       console.log(`🐍 Calling Python processor: ${processorScript}`);
       
       const { spawn } = require('child_process');
       
       return new Promise((resolve, reject) => {
+        // Ensure FFmpeg is available in the subprocess PATH
+        const ffmpegPath = 'C:\\Users\\lxdav\\AppData\\Local\\Microsoft\\WinGet\\Packages\\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\\ffmpeg-8.0-full_build\\bin';
+        const currentPath = process.env.PATH || '';
+        const newPath = currentPath.includes(ffmpegPath) ? currentPath : `${currentPath};${ffmpegPath}`;
+        
+        console.log(`🔧 Setting PATH for Python subprocess: ${newPath.substring(0, 200)}...`);
+        
         const pythonProcess = spawn('python', [processorScript, inputFile, processedDir, jobId], {
-          stdio: ['pipe', 'pipe', 'pipe']
+          stdio: ['pipe', 'pipe', 'pipe'],
+          env: {
+            ...process.env,
+            PATH: newPath
+          }
         });
 
         let outputBuffer = '';

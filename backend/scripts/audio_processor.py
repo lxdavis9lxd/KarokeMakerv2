@@ -163,11 +163,11 @@ def separate_audio_ffmpeg(input_file, output_dir, job_id):
         
         log_progress(job_id, 70, "Creating instrumental track...")
         
-        # Create instrumental by applying a different filter
-        # Use a high-pass filter to emphasize instruments
+        # Create instrumental using the same vocal removal as karaoke
+        # This ensures both tracks are vocal-free
         subprocess.run([
             "ffmpeg", "-i", str(input_file),
-            "-af", "highpass=f=200,lowpass=f=8000",
+            "-af", "pan=mono|c0=0.5*c0+-0.5*c1",
             "-acodec", "mp3", "-ab", "192k", 
             str(instrumental_file), "-y"
         ], check=True, capture_output=True)
@@ -208,13 +208,13 @@ def separate_audio_ffmpeg(input_file, output_dir, job_id):
   * Best for songs with center-panned vocals
   
 - Instrumental Track: {instrumental_file.name}  
-  * Frequency filtering applied
-  * Enhanced instrumental frequencies
+  * Same vocal removal as karaoke track
+  * Optimized for instrumental playback
 
 ## Processing Notes
 - Method: FFmpeg audio filters + OpenAI Whisper
 - Karaoke filter: pan=mono|c0=0.5*c0+-0.5*c1
-- Instrumental filter: highpass + lowpass
+- Instrumental filter: pan=mono|c0=0.5*c0+-0.5*c1 (same as karaoke)
 - Transcription: Word-level timestamps for karaoke sync
 - Quality: Good for center-panned vocals with auto-generated lyrics
 
