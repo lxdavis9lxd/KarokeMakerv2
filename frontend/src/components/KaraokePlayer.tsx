@@ -26,68 +26,68 @@ const KaraokePlayer: React.FC<KaraokePlayerProps> = ({
 
   // Parse lyrics from the timestamped format
   useEffect(() => {
+    console.log('🚀 KaraokePlayer useEffect triggered - lyricsText length:', lyricsText.length);
+    
+    if (!lyricsText || lyricsText.length === 0) {
+      console.log('❌ No lyrics text provided to KaraokePlayer');
+      return;
+    }
+
     const parseLyrics = (lyricsText: string): LyricWord[] => {
-      console.log('🎵 Parsing lyrics text:', lyricsText.length, 'characters');
-      console.log('🎵 First 500 chars:', lyricsText.substring(0, 500));
-      const lines = lyricsText.split('\n');
-      const parsedLyrics: LyricWord[] = [];
-
-      // Find the start of the timestamped section
-      let inTimestampedSection = false;
-      
-      lines.forEach((line, index) => {
-        // Check if we've reached the timestamped section
-        if (line.includes('## Timestamped Lyrics (Karaoke Format)')) {
-          inTimestampedSection = true;
-          console.log('📍 Found timestamped section at line', index);
-          return;
-        }
+      try {
+        console.log('🎵 Starting LRC lyrics parsing...');
+        console.log('🎵 Text length:', lyricsText.length);
+        console.log('🎵 First 200 chars:', lyricsText.substring(0, 200));
         
-        // Skip lines before the timestamped section
-        if (!inTimestampedSection) {
-          return;
-        }
+        const lines = lyricsText.split('\n');
+        console.log('🎵 Total lines:', lines.length);
         
-        // Stop if we reach another section
-        if (line.startsWith('## ') && !line.includes('## Timestamped Lyrics')) {
-          console.log('📍 Reached end of timestamped section at line', index);
-          return;
-        }
+        const parsedLyrics: LyricWord[] = [];
         
-        // Debug: log lines we're checking
-        if (inTimestampedSection && line.trim()) {
-          console.log(`🔍 Line ${index}: "${line}"`);
-          console.log(`🔍 Starts with 4+ spaces: ${/^\s{4,}/.test(line)}`);
-          console.log(`🔍 Contains timestamp: ${/\[\d{1,2}:\d{2}\.\d{2}\]/.test(line)}`);
-        }
-        
-        // Only parse word-level timestamps (indented with 4+ spaces)
-        // This gives us the best granularity for karaoke
-        const wordMatch = line.match(/^\s{4,}\[(\d{1,2}):(\d{2}\.\d{2})\]\s+(.+)$/);
-        
-        if (wordMatch) {
-          const minutes = parseInt(wordMatch[1]);
-          const seconds = parseFloat(wordMatch[2]);
-          const word = wordMatch[3].trim();
-          const timeInSeconds = minutes * 60 + seconds;
-          
-          // Skip empty words or timing markers
-          if (word && word.length > 0) {
-            console.log(`🎤 Word at ${timeInSeconds.toFixed(2)}s: "${word}"`);
-            parsedLyrics.push({
-              time: timeInSeconds,
-              word: word
-            });
+        lines.forEach((line, index) => {
+          // Skip empty lines and metadata
+          line = line.trim();
+          if (!line || line.startsWith('[ar:') || line.startsWith('[ti:') || line.startsWith('[length:')) {
+            return;
           }
-        }
-      });
+          
+          // Parse LRC format: [MM:SS.XX]Lyrics text
+          const lrcMatch = line.match(/^\[(\d{1,2}):(\d{2}\.\d{2})\](.+)$/);
+          
+          if (lrcMatch) {
+            const minutes = parseInt(lrcMatch[1]);
+            const seconds = parseFloat(lrcMatch[2]);
+            const text = lrcMatch[3].trim();
+            const timeInSeconds = minutes * 60 + seconds;
+            
+            console.log(`📍 LRC Line ${index}: [${minutes}:${seconds.toFixed(2)}] "${text}" -> ${timeInSeconds}s`);
+            
+            // Split text into words for karaoke display
+            if (text && text.length > 0) {
+              const words = text.split(/\s+/).filter(word => word.length > 0);
+              const wordsPerSecond = words.length > 0 ? 2.0 : 0; // Assume 2 words per second
+              
+              words.forEach((word, wordIndex) => {
+                const wordTime = timeInSeconds + (wordIndex / wordsPerSecond);
+                parsedLyrics.push({
+                  time: wordTime,
+                  word: word
+                });
+              });
+            }
+          }
+        });
 
-      console.log('🎵 Total parsed lyrics:', parsedLyrics.length);
-      return parsedLyrics.sort((a, b) => a.time - b.time);
+        console.log('🎵 FINAL: Parsed', parsedLyrics.length, 'lyrics words from LRC format');
+        return parsedLyrics.sort((a, b) => a.time - b.time);
+      } catch (error) {
+        console.error('❌ Error parsing LRC lyrics:', error);
+        return [];
+      }
     };
 
     const parsed = parseLyrics(lyricsText);
-    console.log('Setting lyrics state with', parsed.length, 'items');
+    console.log('✅ Setting lyrics state with', parsed.length, 'items');
     setLyrics(parsed);
   }, [lyricsText]);
 
@@ -321,6 +321,9 @@ const KaraokePlayer: React.FC<KaraokePlayerProps> = ({
           {lyrics.length === 0 && (
             <div className="text-2xl text-gray-400">
               🎵 Instrumental playing... No lyrics available 🎵
+              <div className="text-sm mt-2">
+                Debug: lyricsText length = {lyricsText.length}
+              </div>
             </div>
           )}
         </div>

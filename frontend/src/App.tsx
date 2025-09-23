@@ -137,10 +137,17 @@ function App() {
 
   // Open karaoke player
   const openKaraokePlayer = async () => {
+    console.log('🎤 OPEN KARAOKE PLAYER CLICKED');
+    console.log('🎤 Current jobId:', jobId);
+    
     const lyrics = await fetchLyricsContent();
+    console.log('🎤 Lyrics fetch result:', lyrics ? lyrics.length : 'null/undefined');
+    
     if (lyrics) {
+      console.log('🎤 Setting showKaraoke to true');
       setShowKaraoke(true);
     } else {
+      console.log('❌ No lyrics returned, showing alert');
       alert('Failed to load lyrics for karaoke player');
     }
   };

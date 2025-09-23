@@ -51,7 +51,7 @@ def install_dependencies():
 def transcribe_vocals(audio_file, job_id):
     """
     Transcribe vocals from audio file using OpenAI Whisper
-    Returns timestamped lyrics suitable for karaoke display
+    Returns timestamped lyrics in LRC format for karaoke display
     """
     try:
         import whisper
@@ -66,55 +66,33 @@ def transcribe_vocals(audio_file, job_id):
         # Transcribe with word-level timestamps
         result = model.transcribe(str(audio_file), word_timestamps=True)
         
-        # Format for karaoke display with better readability
-        karaoke_lyrics = []
+        # Generate LRC format lyrics
+        lrc_lines = []
         readable_lyrics = []
+        
+        # Add LRC metadata
+        lrc_lines.append("[ar:KarokeMaker v2]")
+        lrc_lines.append("[ti:Generated Karaoke]")
+        lrc_lines.append(f"[length:{format_lrc_time(result.get('duration', 0))}]")
+        lrc_lines.append("")
         
         if 'segments' in result:
             for segment in result['segments']:
-                if 'words' in segment:
-                    # Group words into readable lines (segment-based)
-                    start_time = segment.get('start', 0)
-                    text = segment.get('text', '').strip()
+                start_time = segment.get('start', 0)
+                text = segment.get('text', '').strip()
+                
+                if text:
+                    # Add segment-level timestamp in LRC format
+                    timestamp = format_lrc_time(start_time)
+                    lrc_lines.append(f"[{timestamp}]{text}")
                     
-                    if text:
-                        start_mins = int(start_time // 60)
-                        start_secs = start_time % 60
-                        
-                        # For karaoke player: segment-level timestamps
-                        karaoke_lyrics.append(f"[{start_mins:02d}:{start_secs:05.2f}] {text}")
-                        
-                        # For readable display: clean text with proper spacing
-                        readable_lyrics.append(text)
-                        
-                        # Also include individual word timestamps for advanced karaoke
-                        word_line = []
-                        for word_info in segment['words']:
-                            word_start = word_info.get('start', 0)
-                            word = word_info.get('word', '').strip()
-                            if word:
-                                word_mins = int(word_start // 60)
-                                word_secs = word_start % 60
-                                word_line.append(f"    [{word_mins:02d}:{word_secs:05.2f}] {word}")
-                        
-                        if word_line:
-                            karaoke_lyrics.extend(word_line)
-                            karaoke_lyrics.append("")  # Add blank line between segments
-                else:
-                    # Fallback to segment-level timestamps
-                    start_time = segment.get('start', 0)
-                    text = segment.get('text', '').strip()
-                    
-                    if text:
-                        start_mins = int(start_time // 60)
-                        start_secs = start_time % 60
-                        karaoke_lyrics.append(f"[{start_mins:02d}:{start_secs:05.2f}] {text}")
-                        readable_lyrics.append(text)
+                    # For readable display
+                    readable_lyrics.append(text)
         
         return {
             'success': True,
-            'lyrics': '\n'.join(karaoke_lyrics),
-            'readable_lyrics': '\n\n'.join(readable_lyrics),  # Readable format with paragraph breaks
+            'lyrics': '\n'.join(lrc_lines),
+            'readable_lyrics': '\n\n'.join(readable_lyrics),
             'full_text': result.get('text', ''),
             'language': result.get('language', 'unknown')
         }
@@ -129,6 +107,12 @@ def transcribe_vocals(audio_file, job_id):
             'success': False,
             'error': f'Transcription failed: {str(e)}'
         }
+
+def format_lrc_time(seconds):
+    """Format time in MM:SS.XX format for LRC files"""
+    minutes = int(seconds // 60)
+    seconds = seconds % 60
+    return f"{minutes:02d}:{seconds:05.2f}"
 
 def separate_audio_ffmpeg(input_file, output_dir, job_id):
     """
@@ -178,84 +162,16 @@ def separate_audio_ffmpeg(input_file, output_dir, job_id):
         log_progress(job_id, 85, "Transcribing vocals with Whisper...")
         transcription_result = transcribe_vocals(input_file, job_id)
         
-        # Create lyrics file with processing information and transcription
-        lyrics_file = Path(output_dir) / f"lyrics_{job_id}.txt"
+        # Create lyrics file in LRC format
+        lyrics_file = Path(output_dir) / f"lyrics_{job_id}.lrc"
         with open(lyrics_file, 'w', encoding='utf-8') as f:
             if transcription_result['success']:
-                f.write(f"""# Karaoke Lyrics - {Path(input_file).name}
-
-## Readable Lyrics
-{transcription_result.get('readable_lyrics', transcription_result['full_text'])}
-
-## Timestamped Lyrics (Karaoke Format)
-{transcription_result['lyrics']}
-
-## Processing Information
-- Language Detected: {transcription_result['language']}
-- Transcription Method: OpenAI Whisper (base model)
-- Vocal Separation: FFmpeg center channel removal
-
----
-
-## File Information
-- Original: {Path(input_file).name}
-- Processed: {job_id}
-- Method: FFmpeg vocal removal + Whisper transcription
-
-## Output Files
-- Karaoke Track: {karaoke_file.name}
-  * Center vocal removal applied
-  * Best for songs with center-panned vocals
-  
-- Instrumental Track: {instrumental_file.name}  
-  * Same vocal removal as karaoke track
-  * Optimized for instrumental playback
-
-## Processing Notes
-- Method: FFmpeg audio filters + OpenAI Whisper
-- Karaoke filter: pan=mono|c0=0.5*c0+-0.5*c1
-- Instrumental filter: pan=mono|c0=0.5*c0+-0.5*c1 (same as karaoke)
-- Transcription: Word-level timestamps for karaoke sync
-- Quality: Good for center-panned vocals with auto-generated lyrics
-
-Generated: {job_id}
-Timestamp: 2025-09-22
-""")
+                f.write(transcription_result['lyrics'])
             else:
-                f.write(f"""# Karaoke Processing Results
-
-## Transcription Error
-{transcription_result['error']}
-
-## File Information
-- Original: {Path(input_file).name}
-- Processed: {job_id}
-- Method: FFmpeg vocal removal (transcription failed)
-
-## Output Files
-- Karaoke Track: {karaoke_file.name}
-  * Center vocal removal applied
-  * Best for songs with center-panned vocals
-  
-- Instrumental Track: {instrumental_file.name}  
-  * Frequency filtering applied
-  * Enhanced instrumental frequencies
-
-## Processing Notes
-- Method: FFmpeg audio filters
-- Karaoke filter: pan=mono|c0=0.5*c0+-0.5*c1
-- Instrumental filter: highpass + lowpass
-- Quality: Good for center-panned vocals
-
-## Upgrade Options
-For AI-powered separation with better quality:
-1. Install Spleeter with Python 3.8-3.10
-2. Use cloud APIs (LALAL.AI, Moises.ai)
-3. Try Facebook Demucs for state-of-the-art results
-
-Generated: {job_id}
-Timestamp: 2025-09-22
-""")
+                # Write error message in LRC comment format
+                f.write(f"[ar:KarokeMaker v2]\n")
+                f.write(f"[ti:Processing Error]\n")
+                f.write(f"[00:00.00]Transcription failed: {transcription_result['error']}\n")
         
         log_progress(job_id, 100, "Processing completed successfully!")
         

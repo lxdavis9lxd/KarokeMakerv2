@@ -61,7 +61,7 @@ router.get('/:id/download', async (req: Request, res: Response) => {
     // Add lyrics file
     const lyricsPath = job.results.lyricsPath;
     if (await fs.access(lyricsPath).then(() => true).catch(() => false)) {
-      archive.file(lyricsPath, { name: 'lyrics.txt' });
+      archive.file(lyricsPath, { name: 'lyrics.lrc' });
     }
 
     // Add metadata file
