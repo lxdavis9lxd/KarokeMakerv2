@@ -105,14 +105,29 @@ function App() {
 
   // Fetch lyrics content for karaoke player
   const fetchLyricsContent = async () => {
-    if (!jobId) return;
+    if (!jobId) {
+      console.log('❌ No jobId available for lyrics fetch');
+      return;
+    }
+    
+    console.log('🎵 Fetching lyrics for job:', jobId);
     
     try {
-      const response = await fetch(`http://localhost:3000/api/jobs/${jobId}/download/lyrics`);
+      const url = `http://localhost:3000/api/jobs/${jobId}/download/lyrics`;
+      console.log('🎵 Lyrics URL:', url);
+      
+      const response = await fetch(url);
+      console.log('🎵 Lyrics response status:', response.status);
+      
       if (response.ok) {
         const text = await response.text();
+        console.log('🎵 Lyrics content length:', text.length);
+        console.log('🎵 First 200 chars of lyrics:', text.substring(0, 200));
         setLyricsContent(text);
+        console.log('🎵 LyricsContent state updated');
         return text;
+      } else {
+        console.error('🎵 Lyrics fetch failed with status:', response.status, response.statusText);
       }
     } catch (error) {
       console.error('Failed to fetch lyrics:', error);
@@ -242,6 +257,11 @@ function App() {
 
   // If karaoke player is open, show it instead of main interface
   if (showKaraoke && jobId) {
+    console.log('🎤 Rendering KaraokePlayer with:');
+    console.log('🎤 jobId:', jobId);
+    console.log('🎤 lyricsContent length:', lyricsContent.length);
+    console.log('🎤 lyricsContent preview:', lyricsContent.substring(0, 100));
+    
     return (
       <div className="relative">
         <button

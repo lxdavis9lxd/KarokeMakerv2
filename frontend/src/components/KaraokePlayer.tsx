@@ -27,17 +27,19 @@ const KaraokePlayer: React.FC<KaraokePlayerProps> = ({
   // Parse lyrics from the timestamped format
   useEffect(() => {
     const parseLyrics = (lyricsText: string): LyricWord[] => {
-      console.log('Parsing lyrics text:', lyricsText.length, 'characters');
+      console.log('🎵 Parsing lyrics text:', lyricsText.length, 'characters');
+      console.log('🎵 First 500 chars:', lyricsText.substring(0, 500));
       const lines = lyricsText.split('\n');
       const parsedLyrics: LyricWord[] = [];
 
       // Find the start of the timestamped section
       let inTimestampedSection = false;
       
-      lines.forEach((line) => {
+      lines.forEach((line, index) => {
         // Check if we've reached the timestamped section
         if (line.includes('## Timestamped Lyrics (Karaoke Format)')) {
           inTimestampedSection = true;
+          console.log('📍 Found timestamped section at line', index);
           return;
         }
         
@@ -47,45 +49,40 @@ const KaraokePlayer: React.FC<KaraokePlayerProps> = ({
         }
         
         // Stop if we reach another section
-        if (line.startsWith('## ') && line.includes('Processing Information')) {
+        if (line.startsWith('## ') && !line.includes('## Timestamped Lyrics')) {
+          console.log('📍 Reached end of timestamped section at line', index);
           return;
         }
         
-        // Match segment-level timestamps: [mm:ss.ss] text (not indented)
-        const segmentMatch = line.match(/^(\[(\d{1,2}):(\d{2}\.\d{2})\])\s+(.+)$/);
+        // Debug: log lines we're checking
+        if (inTimestampedSection && line.trim()) {
+          console.log(`🔍 Line ${index}: "${line}"`);
+          console.log(`🔍 Starts with 4+ spaces: ${/^\s{4,}/.test(line)}`);
+          console.log(`🔍 Contains timestamp: ${/\[\d{1,2}:\d{2}\.\d{2}\]/.test(line)}`);
+        }
         
-        // Match word-level timestamps: ____[mm:ss.ss] word (indented with spaces)
-        const wordMatch = line.match(/^\s{4,}(\[(\d{1,2}):(\d{2}\.\d{2})\])\s+(.+)$/);
+        // Only parse word-level timestamps (indented with 4+ spaces)
+        // This gives us the best granularity for karaoke
+        const wordMatch = line.match(/^\s{4,}\[(\d{1,2}):(\d{2}\.\d{2})\]\s+(.+)$/);
         
         if (wordMatch) {
-          // This is a word-level timestamp (indented with 4+ spaces)
-          const minutes = parseInt(wordMatch[2]);
-          const seconds = parseFloat(wordMatch[3]);
-          const word = wordMatch[4].trim();
+          const minutes = parseInt(wordMatch[1]);
+          const seconds = parseFloat(wordMatch[2]);
+          const word = wordMatch[3].trim();
           const timeInSeconds = minutes * 60 + seconds;
           
-          console.log(`Word at ${timeInSeconds}s: "${word}"`);
-          parsedLyrics.push({
-            time: timeInSeconds,
-            word: word
-          });
-        } else if (segmentMatch) {
-          // This is a segment-level timestamp - we could use this for phrases too
-          const minutes = parseInt(segmentMatch[2]);
-          const seconds = parseFloat(segmentMatch[3]);
-          const text = segmentMatch[4].trim();
-          const timeInSeconds = minutes * 60 + seconds;
-          
-          console.log(`Segment at ${timeInSeconds}s: "${text}"`);
-          // For now, let's use segments as single words for simpler display
-          parsedLyrics.push({
-            time: timeInSeconds,
-            word: text
-          });
+          // Skip empty words or timing markers
+          if (word && word.length > 0) {
+            console.log(`🎤 Word at ${timeInSeconds.toFixed(2)}s: "${word}"`);
+            parsedLyrics.push({
+              time: timeInSeconds,
+              word: word
+            });
+          }
         }
       });
 
-      console.log('Total parsed lyrics:', parsedLyrics.length);
+      console.log('🎵 Total parsed lyrics:', parsedLyrics.length);
       return parsedLyrics.sort((a, b) => a.time - b.time);
     };
 
@@ -98,17 +95,34 @@ const KaraokePlayer: React.FC<KaraokePlayerProps> = ({
   useEffect(() => {
     const updateTime = () => {
       if (audioRef.current) {
-        setCurrentTime(audioRef.current.currentTime);
+        const currentAudioTime = audioRef.current.currentTime;
+        setCurrentTime(currentAudioTime);
         
-        // Find the current word being sung
+        // Find the current word being sung with better timing
         let wordIndex = -1;
+        const lookAheadTime = 0.2; // 200ms look-ahead for better sync
+        
         for (let i = 0; i < lyrics.length; i++) {
-          if (lyrics[i].time <= audioRef.current.currentTime) {
+          // A word is "current" if we're within its time window
+          const wordTime = lyrics[i].time;
+          const nextWordTime = i + 1 < lyrics.length ? lyrics[i + 1].time : wordTime + 2;
+          
+          if (currentAudioTime >= wordTime - lookAheadTime && 
+              currentAudioTime < nextWordTime - lookAheadTime) {
             wordIndex = i;
-          } else {
             break;
+          } else if (currentAudioTime >= wordTime - lookAheadTime) {
+            wordIndex = i; // Keep track of the last word we've passed
           }
         }
+        
+        if (wordIndex !== currentWordIndex) {
+          console.log(`🎤 Word change: ${currentWordIndex} -> ${wordIndex} at ${currentAudioTime.toFixed(2)}s`);
+          if (wordIndex >= 0 && lyrics[wordIndex]) {
+            console.log(`🎵 Now playing: "${lyrics[wordIndex].word}"`);
+          }
+        }
+        
         setCurrentWordIndex(wordIndex);
       }
     };
@@ -118,13 +132,14 @@ const KaraokePlayer: React.FC<KaraokePlayerProps> = ({
       audio.addEventListener('timeupdate', updateTime);
       audio.addEventListener('loadedmetadata', () => {
         setDuration(audio.duration);
+        console.log('🎵 Audio loaded, duration:', audio.duration);
       });
 
       return () => {
         audio.removeEventListener('timeupdate', updateTime);
       };
     }
-  }, [lyrics]);
+  }, [lyrics, currentWordIndex]);
 
   // Debug audio loading
   useEffect(() => {
@@ -195,19 +210,29 @@ const KaraokePlayer: React.FC<KaraokePlayerProps> = ({
 
   // Group lyrics into lines for better display
   const getLyricsDisplay = () => {
-    console.log('getLyricsDisplay called with lyrics:', lyrics.length, 'currentWordIndex:', currentWordIndex);
+    console.log('🎵 getLyricsDisplay called with lyrics:', lyrics.length, 'currentWordIndex:', currentWordIndex);
     
-    const linesPerScreen = 6;
+    if (lyrics.length === 0) {
+      return [];
+    }
+    
+    const linesPerScreen = 4;
     const lines: LyricWord[][] = [];
     let currentLine: LyricWord[] = [];
     let currentLineLength = 0;
-    const maxLineLength = 80; // Characters per line
+    const maxLineLength = 60; // Characters per line (shorter for better readability)
     
     lyrics.forEach((lyricWord) => {
       const wordLength = lyricWord.word.length;
       
-      // If adding this word would exceed line length, start a new line
-      if (currentLineLength + wordLength > maxLineLength && currentLine.length > 0) {
+      // Start a new line if:
+      // 1. Adding this word would exceed line length AND we have words in current line
+      // 2. This word contains punctuation that suggests end of phrase
+      const endsPhrase = /[.!?]$/.test(lyricWord.word);
+      const shouldBreakLine = (currentLineLength + wordLength > maxLineLength && currentLine.length > 0) || 
+                             (endsPhrase && currentLine.length >= 3);
+      
+      if (shouldBreakLine) {
         lines.push([...currentLine]);
         currentLine = [lyricWord];
         currentLineLength = wordLength;
@@ -222,7 +247,7 @@ const KaraokePlayer: React.FC<KaraokePlayerProps> = ({
       lines.push(currentLine);
     }
 
-    console.log('Created', lines.length, 'lines for display');
+    console.log('🎵 Created', lines.length, 'lines for display');
 
     // Find which line contains the current word
     let currentLineIndex = 0;
@@ -235,11 +260,12 @@ const KaraokePlayer: React.FC<KaraokePlayerProps> = ({
       wordCount += lines[i].length;
     }
 
+    // Show lines around the current line for context
     const startLine = Math.max(0, currentLineIndex - Math.floor(linesPerScreen / 2));
     const endLine = Math.min(lines.length, startLine + linesPerScreen);
 
     const displayLines = lines.slice(startLine, endLine);
-    console.log('Displaying lines', startLine, 'to', endLine, ':', displayLines.length, 'lines');
+    console.log('🎵 Displaying lines', startLine, 'to', endLine, ':', displayLines.length, 'lines');
     
     return displayLines;
   };
@@ -257,10 +283,11 @@ const KaraokePlayer: React.FC<KaraokePlayerProps> = ({
         <div className="lyrics-container text-center max-w-4xl">
           {/* Debug Info */}
           <div className="mb-4 text-sm text-gray-300 bg-black bg-opacity-30 p-2 rounded">
-            Lyrics: {lyrics.length} items | Current: {currentWordIndex} | Time: {currentTime.toFixed(1)}s
+            <div>📊 Lyrics: {lyrics.length} words | Current: {currentWordIndex} | Time: {currentTime.toFixed(1)}s</div>
             {currentWordIndex >= 0 && currentWordIndex < lyrics.length && (
-              <span> | Playing: "{lyrics[currentWordIndex].word}"</span>
+              <div>🎤 Playing: "{lyrics[currentWordIndex].word}" | Next: {currentWordIndex + 1 < lyrics.length ? `"${lyrics[currentWordIndex + 1].word}"` : 'End'}</div>
             )}
+            <div>🎵 Audio ready: {audioRef.current?.readyState || 0}/4 | Duration: {duration.toFixed(1)}s</div>
           </div>
           
           {getLyricsDisplay().map((line, lineIndex) => (
