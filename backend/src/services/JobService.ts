@@ -238,6 +238,9 @@ export class JobService {
       return this.realJobProcessing(jobId);
     }
 
+    // Enable real processing by default instead of simulation
+    return this.realJobProcessing(jobId);
+
     // Fallback to simulation for development mode
     console.log(`🎵 Simulating processing for job ${jobId}`);
     
@@ -341,8 +344,8 @@ Generated on: ${new Date().toISOString()}
       await fs.mkdir(processedDir, { recursive: true });
 
       // Call Python script for real audio processing
-      const scriptPath = path.resolve('./scripts/audio_processor.py');
-      const fallbackScriptPath = path.resolve('./scripts/audio_processor_fallback.py');
+      const scriptPath = path.resolve('./backend/scripts/audio_processor.py');
+      const fallbackScriptPath = path.resolve('./backend/scripts/audio_processor_fallback.py');
       
       // Now that FFmpeg is installed, use the full processor
       let processorScript = scriptPath;

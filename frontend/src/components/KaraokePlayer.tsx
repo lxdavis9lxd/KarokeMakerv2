@@ -27,44 +27,71 @@ const KaraokePlayer: React.FC<KaraokePlayerProps> = ({
   // Parse lyrics from the timestamped format
   useEffect(() => {
     const parseLyrics = (lyricsText: string): LyricWord[] => {
+      console.log('Parsing lyrics text:', lyricsText.length, 'characters');
       const lines = lyricsText.split('\n');
       const parsedLyrics: LyricWord[] = [];
 
-      lines.forEach(line => {
-        // Match segment-level timestamps: [mm:ss.ss] text
-        const segmentMatch = line.match(/^(\[(\d{2}):(\d{2}\.\d{2})\])\s+(.+)$/);
-        // Match word-level timestamps: ____[mm:ss.ss] word (indented)
-        const wordMatch = line.match(/^\s+(\[(\d{2}):(\d{2}\.\d{2})\])\s+(.+)$/);
+      // Find the start of the timestamped section
+      let inTimestampedSection = false;
+      
+      lines.forEach((line) => {
+        // Check if we've reached the timestamped section
+        if (line.includes('## Timestamped Lyrics (Karaoke Format)')) {
+          inTimestampedSection = true;
+          return;
+        }
         
-        if (segmentMatch && !line.startsWith('    ')) {
-          // This is a segment-level timestamp - treat as a phrase
-          const minutes = parseInt(segmentMatch[2]);
-          const seconds = parseFloat(segmentMatch[3]);
-          const text = segmentMatch[4].trim();
-          const timeInSeconds = minutes * 60 + seconds;
-          
-          parsedLyrics.push({
-            time: timeInSeconds,
-            word: text
-          });
-        } else if (wordMatch) {
-          // This is a word-level timestamp (indented)
+        // Skip lines before the timestamped section
+        if (!inTimestampedSection) {
+          return;
+        }
+        
+        // Stop if we reach another section
+        if (line.startsWith('## ') && line.includes('Processing Information')) {
+          return;
+        }
+        
+        // Match segment-level timestamps: [mm:ss.ss] text (not indented)
+        const segmentMatch = line.match(/^(\[(\d{1,2}):(\d{2}\.\d{2})\])\s+(.+)$/);
+        
+        // Match word-level timestamps: ____[mm:ss.ss] word (indented with spaces)
+        const wordMatch = line.match(/^\s{4,}(\[(\d{1,2}):(\d{2}\.\d{2})\])\s+(.+)$/);
+        
+        if (wordMatch) {
+          // This is a word-level timestamp (indented with 4+ spaces)
           const minutes = parseInt(wordMatch[2]);
           const seconds = parseFloat(wordMatch[3]);
           const word = wordMatch[4].trim();
           const timeInSeconds = minutes * 60 + seconds;
           
+          console.log(`Word at ${timeInSeconds}s: "${word}"`);
           parsedLyrics.push({
             time: timeInSeconds,
             word: word
           });
+        } else if (segmentMatch) {
+          // This is a segment-level timestamp - we could use this for phrases too
+          const minutes = parseInt(segmentMatch[2]);
+          const seconds = parseFloat(segmentMatch[3]);
+          const text = segmentMatch[4].trim();
+          const timeInSeconds = minutes * 60 + seconds;
+          
+          console.log(`Segment at ${timeInSeconds}s: "${text}"`);
+          // For now, let's use segments as single words for simpler display
+          parsedLyrics.push({
+            time: timeInSeconds,
+            word: text
+          });
         }
       });
 
+      console.log('Total parsed lyrics:', parsedLyrics.length);
       return parsedLyrics.sort((a, b) => a.time - b.time);
     };
 
-    setLyrics(parseLyrics(lyricsText));
+    const parsed = parseLyrics(lyricsText);
+    console.log('Setting lyrics state with', parsed.length, 'items');
+    setLyrics(parsed);
   }, [lyricsText]);
 
   // Update current time and find current word
@@ -168,6 +195,8 @@ const KaraokePlayer: React.FC<KaraokePlayerProps> = ({
 
   // Group lyrics into lines for better display
   const getLyricsDisplay = () => {
+    console.log('getLyricsDisplay called with lyrics:', lyrics.length, 'currentWordIndex:', currentWordIndex);
+    
     const linesPerScreen = 6;
     const lines: LyricWord[][] = [];
     let currentLine: LyricWord[] = [];
@@ -193,6 +222,8 @@ const KaraokePlayer: React.FC<KaraokePlayerProps> = ({
       lines.push(currentLine);
     }
 
+    console.log('Created', lines.length, 'lines for display');
+
     // Find which line contains the current word
     let currentLineIndex = 0;
     let wordCount = 0;
@@ -207,7 +238,10 @@ const KaraokePlayer: React.FC<KaraokePlayerProps> = ({
     const startLine = Math.max(0, currentLineIndex - Math.floor(linesPerScreen / 2));
     const endLine = Math.min(lines.length, startLine + linesPerScreen);
 
-    return lines.slice(startLine, endLine);
+    const displayLines = lines.slice(startLine, endLine);
+    console.log('Displaying lines', startLine, 'to', endLine, ':', displayLines.length, 'lines');
+    
+    return displayLines;
   };
 
   return (
@@ -221,6 +255,14 @@ const KaraokePlayer: React.FC<KaraokePlayerProps> = ({
       {/* Lyrics Display */}
       <div className="flex-1 flex items-center justify-center p-8">
         <div className="lyrics-container text-center max-w-4xl">
+          {/* Debug Info */}
+          <div className="mb-4 text-sm text-gray-300 bg-black bg-opacity-30 p-2 rounded">
+            Lyrics: {lyrics.length} items | Current: {currentWordIndex} | Time: {currentTime.toFixed(1)}s
+            {currentWordIndex >= 0 && currentWordIndex < lyrics.length && (
+              <span> | Playing: "{lyrics[currentWordIndex].word}"</span>
+            )}
+          </div>
+          
           {getLyricsDisplay().map((line, lineIndex) => (
             <div key={lineIndex} className="lyrics-line mb-6">
               {line.map((lyricWord, wordIndex) => {

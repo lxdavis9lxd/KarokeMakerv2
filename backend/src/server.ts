@@ -41,6 +41,45 @@ app.get('/api', (req, res) => {
   res.json({ message: 'KarokeMaker v2 API', version: '1.0.0' });
 });
 
+// Test route for debugging existing files
+app.get('/api/test/:jobId/:type', (req, res) => {
+  const { jobId, type } = req.params;
+  const path = require('path');
+  const fs = require('fs');
+  
+  const processedDir = path.resolve('./processed');
+  let fileName: string;
+  
+  switch (type) {
+    case 'instrumental':
+      fileName = `instrumental_${jobId}.mp3`;
+      break;
+    case 'karaoke':
+      fileName = `karaoke_${jobId}.mp3`;
+      break;
+    case 'lyrics':
+      fileName = `lyrics_${jobId}.txt`;
+      break;
+    default:
+      return res.status(400).json({ error: 'Invalid type' });
+  }
+  
+  const filePath = path.join(processedDir, fileName);
+  
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).json({ error: 'File not found', path: filePath });
+  }
+  
+  if (type === 'lyrics') {
+    res.setHeader('Content-Type', 'text/plain');
+  } else {
+    res.setHeader('Content-Type', 'audio/mp3');
+  }
+  
+  res.setHeader('Cache-Control', 'public, max-age=3600');
+  fs.createReadStream(filePath).pipe(res);
+});
+
 app.use('/api', uploadRouter);
 app.use('/api/jobs', jobsRouter);
 app.use('/api/jobs', downloadRouter);
